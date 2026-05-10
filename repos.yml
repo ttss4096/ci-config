@@ -1,5 +1,5 @@
 repos:
-  - name: craft-engine
+  - name: "craft-engine"
     url: https://github.com/Xiao-MoMi/craft-engine.git
     branch: dev
     jdk: jdk21
