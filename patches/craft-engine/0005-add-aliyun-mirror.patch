@@ -1,7 +1,9 @@
 diff --git a/settings.gradle.kts b/settings.gradle.kts
+index e3de0edb9..c36aa9d6b 100644
 --- a/settings.gradle.kts
 +++ b/settings.gradle.kts
-@@ -11,6 +11,9 @@
+@@ -14,8 +14,11 @@ pluginManagement {
+         kotlin("jvm") version "2.3.10"
      }
      repositories {
 +        maven("https://maven.aliyun.com/repository/public/")
@@ -10,3 +12,7 @@ diff --git a/settings.gradle.kts b/settings.gradle.kts
          gradlePluginPortal()
          maven("https://repo.papermc.io/repository/maven-public/")
          maven("https://maven.fabricmc.net/")
+     }
+-}
+\ No newline at end of file
++}
