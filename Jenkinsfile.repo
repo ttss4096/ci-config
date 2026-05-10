@@ -21,6 +21,7 @@ pipeline {
 
     environment {
         STATE_DIR = '/var/lib/jenkins/ci-state'
+        GRADLE_USER_HOME = '/var/lib/jenkins/.gradle-global-cache'
         // FAILURE_TYPE = 'UNKNOWN'
         // SKIP_BUILD = 'false'
         // STATE_FILE = ''
