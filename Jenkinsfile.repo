@@ -82,7 +82,7 @@ pipeline {
                         echo " - name='${r.name}', url='${r.url}', branch='${r.branch}', jdk='${r.jdk}', build_cmd='${r.build_cmd}'"
                     }
 
-                    def repo = config.repos.find { it.name?.toString() == params.REPO_NAME.toString() }
+                    def repo = config.repos.find { it.name.toString().trim() == params.REPO_NAME.toString().trim() }
 
                     if (repo == null) {
                         error "Repo config not found for REPO_NAME='${params.REPO_NAME}'. Please check repos.yml name field."
@@ -139,6 +139,10 @@ pipeline {
                 }
 
                 sh '''
+                    if [ -z "$REPO_URL" ]; then
+                        echo "ERROR: REPO_URL is empty. Check Load CI Config stage."
+                        exit 1
+                    fi
                     mkdir -p "$STATE_DIR"
 
                     echo "Checking remote branch..."
