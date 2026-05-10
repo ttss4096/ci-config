@@ -3,7 +3,7 @@ repos:
     url: https://gh.ttss4096.com/Xiao-MoMi/craft-engine.git
     branch: dev
     jdk: jdk21
-    build_cmd: "./gradlew -I legacy-bridge.gradle clean :bukkit:paper-loader:shadowJar --no-daemon --info"
+    build_cmd: "./gradlew -I legacy-bridge.gradle clean :bukkit:paper-loader:shadowJar --no-daemon"
     artifact_patterns:
       - "target/*.jar"
     patches:

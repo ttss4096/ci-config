@@ -256,6 +256,8 @@ pipeline {
                             rm -rf ./* ./.??* || true
 
                             git init .
+                            git config user.name "Jenkins CI"
+                            git config user.email "jenkins@ci.local"
                             git remote add origin "$REPO_URL"
                             git fetch --tags origin "$REPO_BRANCH"
                             git checkout --detach FETCH_HEAD
