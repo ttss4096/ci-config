@@ -257,7 +257,7 @@ pipeline {
 
                             git init .
                             git remote add origin "$REPO_URL"
-                            git fetch --depth 1 origin "$REPO_BRANCH"
+                            git fetch --tags origin "$REPO_BRANCH"
                             git checkout --detach FETCH_HEAD
 
                             git rev-parse HEAD > ../commit.txt
