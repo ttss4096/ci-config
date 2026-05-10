@@ -43,7 +43,9 @@ pipeline {
 
                 script {
                     env.FAILURE_TYPE = 'LOAD_CONFIG_FAILED'
-
+                    env.SKIP_BUILD = 'false'
+                    
+                    env.FAILURE_TYPE = 'LOAD_CONFIG_FAILED'
                     echo "================ Load CI Config ================"
                     echo "params.REPO_NAME='${params.REPO_NAME}'"
                     echo "Workspace:"
