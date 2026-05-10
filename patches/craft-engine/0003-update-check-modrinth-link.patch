@@ -1,0 +1,43 @@
+diff --git a/core/src/main/java/net/momirealms/craftengine/core/plugin/CraftEngine.java b/core/src/main/java/net/momirealms/craftengine/core/plugin/CraftEngine.java
+index ff51403b4..7b689339c 100644
+--- a/core/src/main/java/net/momirealms/craftengine/core/plugin/CraftEngine.java
++++ b/core/src/main/java/net/momirealms/craftengine/core/plugin/CraftEngine.java
+@@ -107,12 +107,6 @@ public abstract class CraftEngine implements Plugin {
+     private boolean isReloading;
+     private boolean isInitializing;
+ 
+-    private String buildByBit = "%%__BUILTBYBIT__%%";
+-    private String polymart = "%%__POLYMART__%%";
+-    private String time = "%%__TIMESTAMP__%%";
+-    private String user = "%%__USER__%%";
+-    private String username = "%%__USERNAME__%%";
+-
+     protected CraftEngine(Consumer<CraftEngine> reloadEventDispatcher) {
+         instance = this;
+         this.reloadEventDispatcher = reloadEventDispatcher;
+@@ -389,24 +383,7 @@ public abstract class CraftEngine implements Plugin {
+     }
+ 
+     private void checkUpdates() {
+-        boolean downloadFromPolymart = this.polymart.equals("1");
+-        boolean downloadFromBBB = this.buildByBit.equals("true");
+-        String link;
+-        if (VersionHelper.PREMIUM) {
+-            if (downloadFromPolymart) {
+-                link = "https://polymart.org/product/7624/";
+-            } else if (downloadFromBBB) {
+-                link = "https://builtbybit.com/resources/82674/";
+-            } else {
+-                if (Locale.getDefault() == Locale.SIMPLIFIED_CHINESE) {
+-                    link = "QQ群[1039968907]";
+-                } else {
+-                    return;
+-                }
+-            }
+-        } else {
+-            link = "https://modrinth.com/plugin/craftengine/";
+-        }
++        String link = "https://modrinth.com/plugin/craftengine/";
+         try {
+             String lv = getLatestVersion();
+             if (lv == null) return;

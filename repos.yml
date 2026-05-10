@@ -1,0 +1,13 @@
+repos:
+  - name: craft-engine
+    url: https://github.com/Xiao-MoMi/craft-engine.git
+    branch: dev
+    jdk: jdk21
+    build_cmd: ./gradlew -I legacy-bridge.gradle clean :bukkit:paper-loader:shadowJar --no-daemon
+    artifact_patterns:
+      - target/*.jar
+    patches:
+      - patches/craft-engine/0001-legacy-custom-block-item-api.patch
+      - patches/craft-engine/0002-legacy-craftengine-items-bytecode-bridge.patch
+      - patches/craft-engine/0003-update-check-modrinth-link.patch
+      - patches/craft-engine/0004-gradlew-executable.patch

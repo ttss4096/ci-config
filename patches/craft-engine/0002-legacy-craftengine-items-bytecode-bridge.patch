@@ -1,0 +1,163 @@
+diff --git a/legacy-bridge.gradle b/legacy-bridge.gradle
+new file mode 100644
+index 000000000..215ec5fd3
+--- /dev/null
++++ b/legacy-bridge.gradle
+@@ -0,0 +1,157 @@
++initscript {
++    repositories {
++        mavenCentral()
++    }
++    dependencies {
++        classpath 'org.ow2.asm:asm:9.7.1'
++    }
++}
++
++import org.objectweb.asm.ClassReader
++import org.objectweb.asm.ClassVisitor
++import org.objectweb.asm.ClassWriter
++import org.objectweb.asm.MethodVisitor
++import org.objectweb.asm.Opcodes
++
++gradle.projectsEvaluated {
++    def bukkitProject = gradle.rootProject.findProject(":bukkit")
++
++    // Init script 会被 buildSrc 也执行一次。
++    // buildSrc 里没有 :bukkit，所以这里必须跳过。
++    if (bukkitProject == null) {
++        println "[legacy-bridge] Skip build ${gradle.rootProject.path}, project :bukkit not found."
++        return
++    }
++
++    println "[legacy-bridge] Found project :bukkit in ${gradle.rootProject.name}"
++
++    bukkitProject.tasks.register("injectCraftEngineItemsLegacyBridge") {
++        dependsOn bukkitProject.tasks.named("compileJava")
++
++        doLast {
++            def classFile = bukkitProject.layout.buildDirectory
++                    .file("classes/java/main/net/momirealms/craftengine/bukkit/api/CraftEngineItems.class")
++                    .get()
++                    .asFile
++
++            if (!classFile.exists()) {
++                throw new GradleException("CraftEngineItems.class not found: ${classFile}")
++            }
++
++            byte[] input = classFile.bytes
++
++            ClassReader cr = new ClassReader(input)
++            ClassWriter cw = new ClassWriter(cr, ClassWriter.COMPUTE_MAXS)
++
++            String owner = "net/momirealms/craftengine/bukkit/api/CraftEngineItems"
++
++            String itemStackDesc = "Lorg/bukkit/inventory/ItemStack;"
++            String keyDesc = "Lnet/momirealms/craftengine/core/util/Key;"
++            String bukkitItemDefinitionDesc = "Lnet/momirealms/craftengine/bukkit/item/BukkitItemDefinition;"
++            String customItemDesc = "Lnet/momirealms/craftengine/core/item/CustomItem;"
++
++            String byItemStackBukkitDesc = "(${itemStackDesc})${bukkitItemDefinitionDesc}"
++            String byItemStackLegacyDesc = "(${itemStackDesc})${customItemDesc}"
++
++            String byIdBukkitDesc = "(${keyDesc})${bukkitItemDefinitionDesc}"
++            String byIdLegacyDesc = "(${keyDesc})${customItemDesc}"
++
++            ClassVisitor cv = new ClassVisitor(Opcodes.ASM9, cw) {
++                boolean hasLegacyByItemStack = false
++                boolean hasLegacyById = false
++
++                @Override
++                MethodVisitor visitMethod(int access, String name, String descriptor, String signature, String[] exceptions) {
++                    if (name == "byItemStack" && descriptor == byItemStackLegacyDesc) {
++                        hasLegacyByItemStack = true
++                    }
++                    if (name == "byId" && descriptor == byIdLegacyDesc) {
++                        hasLegacyById = true
++                    }
++                    return super.visitMethod(access, name, descriptor, signature, exceptions)
++                }
++
++                @Override
++                void visitEnd() {
++                    if (!hasLegacyByItemStack) {
++                        MethodVisitor mv = super.visitMethod(
++                                Opcodes.ACC_PUBLIC | Opcodes.ACC_STATIC | Opcodes.ACC_SYNTHETIC,
++                                "byItemStack",
++                                byItemStackLegacyDesc,
++                                null,
++                                null
++                        )
++                        mv.visitCode()
++
++                        // return (CustomItem) CraftEngineItems.byItemStack(itemStack);
++                        mv.visitVarInsn(Opcodes.ALOAD, 0)
++                        mv.visitMethodInsn(
++                                Opcodes.INVOKESTATIC,
++                                owner,
++                                "byItemStack",
++                                byItemStackBukkitDesc,
++                                false
++                        )
++                        mv.visitTypeInsn(
++                                Opcodes.CHECKCAST,
++                                "net/momirealms/craftengine/core/item/CustomItem"
++                        )
++                        mv.visitInsn(Opcodes.ARETURN)
++
++                        mv.visitMaxs(1, 1)
++                        mv.visitEnd()
++
++                        println "[legacy-bridge] Injected byItemStack(ItemStack): CustomItem"
++                    } else {
++                        println "[legacy-bridge] Legacy byItemStack bridge already exists, skip."
++                    }
++
++                    if (!hasLegacyById) {
++                        MethodVisitor mv = super.visitMethod(
++                                Opcodes.ACC_PUBLIC | Opcodes.ACC_STATIC | Opcodes.ACC_SYNTHETIC,
++                                "byId",
++                                byIdLegacyDesc,
++                                null,
++                                null
++                        )
++                        mv.visitCode()
++
++                        // return (CustomItem) CraftEngineItems.byId(id);
++                        mv.visitVarInsn(Opcodes.ALOAD, 0)
++                        mv.visitMethodInsn(
++                                Opcodes.INVOKESTATIC,
++                                owner,
++                                "byId",
++                                byIdBukkitDesc,
++                                false
++                        )
++                        mv.visitTypeInsn(
++                                Opcodes.CHECKCAST,
++                                "net/momirealms/craftengine/core/item/CustomItem"
++                        )
++                        mv.visitInsn(Opcodes.ARETURN)
++
++                        mv.visitMaxs(1, 1)
++                        mv.visitEnd()
++
++                        println "[legacy-bridge] Injected byId(Key): CustomItem"
++                    } else {
++                        println "[legacy-bridge] Legacy byId bridge already exists, skip."
++                    }
++
++                    super.visitEnd()
++                }
++            }
++
++            cr.accept(cv, 0)
++
++            classFile.bytes = cw.toByteArray()
++
++            println "[legacy-bridge] Patched ${classFile}"
++        }
++    }
++
++    bukkitProject.tasks.named("classes") {
++        dependsOn bukkitProject.tasks.named("injectCraftEngineItemsLegacyBridge")
++    }
++}

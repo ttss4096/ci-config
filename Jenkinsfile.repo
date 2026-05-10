@@ -1,0 +1,360 @@
+pipeline {
+    agent any
+
+    options {
+        timestamps()
+        ansiColor('xterm')
+        disableConcurrentBuilds()
+        timeout(time: 60, unit: 'MINUTES')
+        skipDefaultCheckout(true)
+        buildDiscarder(logRotator(
+            daysToKeepStr: '180',
+            numToKeepStr: '100',
+            artifactNumToKeepStr: '20'
+        ))
+    }
+
+    parameters {
+        string(name: 'REPO_NAME', defaultValue: '', description: 'Repo name in repos.yml')
+        booleanParam(name: 'FORCE_BUILD', defaultValue: false, description: 'Force rebuild even if no remote/config/patch change')
+    }
+
+    environment {
+        FAILURE_TYPE = 'UNKNOWN'
+
+        SKIP_BUILD = 'false'
+
+        STATE_DIR = '/var/lib/jenkins/ci-state'
+        STATE_FILE = ''
+        COMMIT_STATE_FILE = ''
+
+        REPO_URL = ''
+        REPO_BRANCH = ''
+        REPO_JDK = ''
+        BUILD_CMD = ''
+        PATCH_LIST = ''
+        ARTIFACT_PATTERNS = ''
+
+        REMOTE_COMMIT = ''
+        BUILD_KEY = ''
+    }
+
+    stages {
+        stage('Load CI Config') {
+            steps {
+                cleanWs()
+                checkout scm
+
+                script {
+                    env.FAILURE_TYPE = 'LOAD_CONFIG_FAILED'
+
+                    if (!params.REPO_NAME?.trim()) {
+                        error "REPO_NAME is required"
+                    }
+
+                    if (!(params.REPO_NAME ==~ /^[A-Za-z0-9_.-]+$/)) {
+                        error "Invalid REPO_NAME: ${params.REPO_NAME}"
+                    }
+
+                    def config = readYaml file: 'repos.yml'
+                    def repo = config.repos.find { it.name == params.REPO_NAME }
+
+                    if (repo == null) {
+                        error "Repo config not found: ${params.REPO_NAME}"
+                    }
+
+                    env.REPO_URL = repo.url
+                    env.REPO_BRANCH = repo.branch
+                    env.REPO_JDK = repo.jdk ?: ''
+                    env.BUILD_CMD = repo.build_cmd
+                    env.PATCH_LIST = repo.patches ? repo.patches.join('\n') : ''
+                    env.ARTIFACT_PATTERNS = repo.artifact_patterns ? repo.artifact_patterns.join(',') : '**/build/libs/*.jar,**/target/*.jar'
+
+                    env.STATE_FILE = "${env.STATE_DIR}/${repo.name}.last_success_key"
+                    env.COMMIT_STATE_FILE = "${env.STATE_DIR}/${repo.name}.last_success_commit"
+
+                    currentBuild.displayName = "#${env.BUILD_NUMBER} ${repo.name}"
+                    currentBuild.description = """
+Repo: ${repo.name}<br>
+Branch: ${repo.branch}<br>
+JDK: ${repo.jdk ?: 'default'}
+"""
+                }
+            }
+        }
+
+        stage('Check Remote Change') {
+            steps {
+                script {
+                    env.FAILURE_TYPE = 'CHECK_REMOTE_FAILED'
+                }
+
+                sh '''
+                    mkdir -p "$STATE_DIR"
+
+                    echo "Checking remote branch..."
+                    echo "REPO_URL=$REPO_URL"
+                    echo "REPO_BRANCH=$REPO_BRANCH"
+
+                    git ls-remote --heads "$REPO_URL" "$REPO_BRANCH" | awk '{print $1}' > remote_commit.txt
+
+                    if [ ! -s remote_commit.txt ]; then
+                        echo "ERROR: Cannot find remote branch"
+                        echo "REPO_URL=$REPO_URL"
+                        echo "REPO_BRANCH=$REPO_BRANCH"
+                        exit 1
+                    fi
+                '''
+
+                script {
+                    env.REMOTE_COMMIT = readFile('remote_commit.txt').trim()
+
+                    def patches = env.PATCH_LIST?.trim()
+                        ? env.PATCH_LIST.split('\n').collect { it.trim() }.findAll { it }
+                        : []
+
+                    def patchHashLines = []
+
+                    for (p in patches) {
+                        if (!fileExists(p)) {
+                            error "Patch file not found in ci-config: ${p}"
+                        }
+
+                        def hash = sh(
+                            script: "sha256sum \"${p}\" | awk '{print \$1}'",
+                            returnStdout: true
+                        ).trim()
+
+                        patchHashLines.add("${p}:${hash}")
+                    }
+
+                    def jenkinsfileHash = sh(
+                        script: "sha256sum Jenkinsfile.repo | awk '{print \$1}'",
+                        returnStdout: true
+                    ).trim()
+
+                    def reposYamlHash = sh(
+                        script: "sha256sum repos.yml | awk '{print \$1}'",
+                        returnStdout: true
+                    ).trim()
+
+                    def keyText = [
+                        "repo=${params.REPO_NAME}",
+                        "url=${env.REPO_URL}",
+                        "branch=${env.REPO_BRANCH}",
+                        "remote_commit=${env.REMOTE_COMMIT}",
+                        "jdk=${env.REPO_JDK}",
+                        "build_cmd=${env.BUILD_CMD}",
+                        "artifact_patterns=${env.ARTIFACT_PATTERNS}",
+                        "jenkinsfile_repo=${jenkinsfileHash}",
+                        "repos_yml=${reposYamlHash}",
+                        "patches=${patchHashLines.join('|')}"
+                    ].join('\n') + '\n'
+
+                    writeFile file: 'build_key_input.txt', text: keyText
+
+                    env.BUILD_KEY = sh(
+                        script: "sha256sum build_key_input.txt | awk '{print \$1}'",
+                        returnStdout: true
+                    ).trim()
+
+                    def lastKey = sh(
+                        script: 'if [ -f "$STATE_FILE" ]; then cat "$STATE_FILE"; fi',
+                        returnStdout: true
+                    ).trim()
+
+                    currentBuild.description += "<br>Remote Commit: ${env.REMOTE_COMMIT}"
+
+                    if (lastKey && lastKey == env.BUILD_KEY && !params.FORCE_BUILD) {
+                        env.SKIP_BUILD = 'true'
+                        currentBuild.result = 'NOT_BUILT'
+                        currentBuild.description += "<br>Status: SKIPPED_NO_CHANGE"
+
+                        echo "No remote/config/patch change. Skip build."
+                        echo "Build key: ${env.BUILD_KEY}"
+                    } else {
+                        echo "Need build."
+                        echo "FORCE_BUILD=${params.FORCE_BUILD}"
+                        echo "Last key: ${lastKey ?: '(none)'}"
+                        echo "Current key: ${env.BUILD_KEY}"
+                    }
+                }
+            }
+        }
+
+        stage('Checkout Source') {
+            when {
+                expression {
+                    return env.SKIP_BUILD != 'true'
+                }
+            }
+
+            steps {
+                script {
+                    env.FAILURE_TYPE = 'CHECKOUT_FAILED'
+                }
+
+                dir('source') {
+                    retry(3) {
+                        sh '''
+                            rm -rf ./* ./.??* || true
+
+                            git init .
+                            git remote add origin "$REPO_URL"
+                            git fetch --depth 1 origin "$REPO_BRANCH"
+                            git checkout --detach FETCH_HEAD
+
+                            git rev-parse HEAD > ../commit.txt
+                        '''
+                    }
+                }
+
+                script {
+                    def commit = readFile('commit.txt').trim()
+                    currentBuild.description += "<br>Checkout Commit: ${commit}"
+                }
+            }
+        }
+
+        stage('Apply Patches') {
+            when {
+                expression {
+                    return env.SKIP_BUILD != 'true' && env.PATCH_LIST?.trim()
+                }
+            }
+
+            steps {
+                script {
+                    env.FAILURE_TYPE = 'PATCH_FAILED'
+                }
+
+                dir('source') {
+                    script {
+                        def patches = env.PATCH_LIST.split('\n').collect { it.trim() }.findAll { it }
+
+                        for (p in patches) {
+                            sh """
+                                echo "Checking patch: ../${p}"
+                                git apply --check "../${p}"
+
+                                echo "Applying patch: ../${p}"
+                                git apply "../${p}"
+                            """
+                        }
+                    }
+                }
+            }
+        }
+
+        stage('Setup JDK') {
+            when {
+                expression {
+                    return env.SKIP_BUILD != 'true'
+                }
+            }
+
+            steps {
+                script {
+                    env.FAILURE_TYPE = 'JDK_SETUP_FAILED'
+
+                    if (env.REPO_JDK?.trim()) {
+                        def javaHome = tool name: env.REPO_JDK, type: 'jdk'
+                        env.JAVA_HOME = javaHome
+                        env.PATH = "${javaHome}/bin:${env.PATH}"
+                    }
+                }
+
+                sh '''
+                    echo "JAVA_HOME=$JAVA_HOME"
+                    java -version
+                '''
+            }
+        }
+
+        stage('Build') {
+            when {
+                expression {
+                    return env.SKIP_BUILD != 'true'
+                }
+            }
+
+            steps {
+                script {
+                    env.FAILURE_TYPE = 'BUILD_FAILED'
+                }
+
+                dir('source') {
+                    sh """
+                        if [ -f gradlew ]; then chmod +x gradlew; fi
+                        if [ -f mvnw ]; then chmod +x mvnw; fi
+
+                        echo "Build command:"
+                        echo "${BUILD_CMD}"
+
+                        ${BUILD_CMD}
+                    """
+                }
+            }
+        }
+
+        stage('Archive Artifacts') {
+            when {
+                expression {
+                    return env.SKIP_BUILD != 'true'
+                }
+            }
+
+            steps {
+                script {
+                    env.FAILURE_TYPE = 'ARCHIVE_FAILED'
+                }
+
+                dir('source') {
+                    archiveArtifacts artifacts: env.ARTIFACT_PATTERNS, allowEmptyArchive: false, fingerprint: true
+                }
+            }
+        }
+    }
+
+    post {
+        success {
+            script {
+                if (env.SKIP_BUILD != 'true') {
+                    currentBuild.description += "<br>Status: SUCCESS"
+
+                    sh '''
+                        mkdir -p "$STATE_DIR"
+
+                        printf '%s\n' "$BUILD_KEY" > "$STATE_FILE"
+                        printf '%s\n' "$REMOTE_COMMIT" > "$COMMIT_STATE_FILE"
+
+                        echo "Saved build state:"
+                        echo "$STATE_FILE"
+                        echo "$COMMIT_STATE_FILE"
+                    '''
+                }
+            }
+        }
+
+        failure {
+            script {
+                if (env.SKIP_BUILD != 'true') {
+                    currentBuild.description += "<br>Status: FAILED<br>Failure Type: ${env.FAILURE_TYPE}"
+                }
+            }
+        }
+
+        unstable {
+            script {
+                currentBuild.description += "<br>Status: UNSTABLE<br>Failure Type: ${env.FAILURE_TYPE}"
+            }
+        }
+
+        always {
+            echo "SKIP_BUILD=${env.SKIP_BUILD}"
+            echo "FAILURE_TYPE=${env.FAILURE_TYPE}"
+            echo "REMOTE_COMMIT=${env.REMOTE_COMMIT}"
+            echo "BUILD_KEY=${env.BUILD_KEY}"
+        }
+    }
+}

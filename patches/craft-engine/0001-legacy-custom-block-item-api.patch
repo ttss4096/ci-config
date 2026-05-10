@@ -1,0 +1,78 @@
+diff --git a/bukkit/src/main/java/net/momirealms/craftengine/bukkit/world/BukkitExistingBlock.java b/bukkit/src/main/java/net/momirealms/craftengine/bukkit/world/BukkitExistingBlock.java
+index bb2597e57..f9e716aaf 100644
+--- a/bukkit/src/main/java/net/momirealms/craftengine/bukkit/world/BukkitExistingBlock.java
++++ b/bukkit/src/main/java/net/momirealms/craftengine/bukkit/world/BukkitExistingBlock.java
+@@ -104,10 +104,10 @@ public final class BukkitExistingBlock implements ExistingBlock {
+     }
+ 
+     @Override
+-    public BlockDefinition customBlock() {
++    public CustomBlock customBlock() {
+         ImmutableBlockState state = CraftEngineBlocks.getCustomBlockState(this.block);
+         if (state != null) {
+-            return state.owner().value();
++            return (CustomBlock) state.owner().value();
+         }
+         return null;
+     }
+diff --git a/core/src/main/java/net/momirealms/craftengine/core/block/AbstractBlockDefinition.java b/core/src/main/java/net/momirealms/craftengine/core/block/AbstractBlockDefinition.java
+index 3ac897315..8cf98f8fd 100644
+--- a/core/src/main/java/net/momirealms/craftengine/core/block/AbstractBlockDefinition.java
++++ b/core/src/main/java/net/momirealms/craftengine/core/block/AbstractBlockDefinition.java
+@@ -17,7 +17,7 @@ import org.jetbrains.annotations.Nullable;
+ 
+ import java.util.*;
+ 
+-public abstract class AbstractBlockDefinition implements BlockDefinition {
++public abstract class AbstractBlockDefinition implements CustomBlock {
+     protected final Key id;
+     protected final Holder.Reference<BlockDefinition> holder;
+     protected final BlockStateVariantProvider variantProvider;
+diff --git a/core/src/main/java/net/momirealms/craftengine/core/block/CustomBlock.java b/core/src/main/java/net/momirealms/craftengine/core/block/CustomBlock.java
+new file mode 100644
+index 000000000..51ed00f82
+--- /dev/null
++++ b/core/src/main/java/net/momirealms/craftengine/core/block/CustomBlock.java
+@@ -0,0 +1,12 @@
++package net.momirealms.craftengine.core.block;
++
++/**
++ * Legacy compatibility alias for {@link BlockDefinition}.
++ * Retained for binary compatibility with plugins compiled against older CE APIs
++ * (e.g. ValhallaMMO 1.9.3).
++ *
++ * @deprecated Use {@link BlockDefinition} instead.
++ */
++@Deprecated
++public interface CustomBlock extends BlockDefinition {
++}
+diff --git a/core/src/main/java/net/momirealms/craftengine/core/item/AbstractItemDefinition.java b/core/src/main/java/net/momirealms/craftengine/core/item/AbstractItemDefinition.java
+index c82525409..79aa2d1c9 100644
+--- a/core/src/main/java/net/momirealms/craftengine/core/item/AbstractItemDefinition.java
++++ b/core/src/main/java/net/momirealms/craftengine/core/item/AbstractItemDefinition.java
+@@ -17,7 +17,7 @@ import java.util.List;
+ import java.util.Map;
+ import java.util.Optional;
+ 
+-public abstract class AbstractItemDefinition implements ItemDefinition {
++public abstract class AbstractItemDefinition implements CustomItem {
+     protected final boolean isVanillaItem;
+     protected final UniqueKey id;
+     protected final Key material;
+diff --git a/core/src/main/java/net/momirealms/craftengine/core/item/CustomItem.java b/core/src/main/java/net/momirealms/craftengine/core/item/CustomItem.java
+new file mode 100644
+index 000000000..f20ddf87e
+--- /dev/null
++++ b/core/src/main/java/net/momirealms/craftengine/core/item/CustomItem.java
+@@ -0,0 +1,11 @@
++package net.momirealms.craftengine.core.item;
++
++/**
++ * Legacy compatibility interface for plugins compiled against older CraftEngine API.
++ *
++ * New API uses ItemDefinition.
++ * Old plugins may still link against CustomItem.
++ */
++@Deprecated
++public interface CustomItem extends ItemDefinition {
++}

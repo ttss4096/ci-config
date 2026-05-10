@@ -1,0 +1,108 @@
+pipeline {
+    agent none
+
+    options {
+        timestamps()
+        ansiColor('xterm')
+        disableConcurrentBuilds()
+        timeout(time: 6, unit: 'HOURS')
+        skipDefaultCheckout(true)
+        buildDiscarder(logRotator(daysToKeepStr: '180', numToKeepStr: '50'))
+    }
+
+    parameters {
+        booleanParam(name: 'FORCE_BUILD_ALL', defaultValue: false, description: 'Force rebuild all repos even if no remote/config/patch change')
+    }
+
+    triggers {
+        cron('H H * * 1')
+    }
+
+    stages {
+        stage('Load Repo List') {
+            agent any
+
+            steps {
+                cleanWs()
+                checkout scm
+
+                script {
+                    def config = readYaml file: 'repos.yml'
+
+                    if (!config.repos || config.repos.size() == 0) {
+                        error "No repos found in repos.yml"
+                    }
+
+                    env.REPO_NAMES = config.repos.collect { it.name }.join(',')
+
+                    currentBuild.description = "Repos: ${config.repos.size()}"
+                }
+            }
+        }
+
+        stage('Build Repositories Sequentially') {
+            agent none
+
+            steps {
+                script {
+                    def repos = env.REPO_NAMES.split(',').collect { it.trim() }.findAll { it }
+
+                    def builtRepos = []
+                    def skippedRepos = []
+                    def failedRepos = []
+                    def otherRepos = []
+
+                    for (repoName in repos) {
+                        echo "========================================"
+                        echo "Triggering build for ${repoName}"
+                        echo "FORCE_BUILD_ALL=${params.FORCE_BUILD_ALL}"
+                        echo "========================================"
+
+                        def result = build job: "${repoName}-build",
+                            parameters: [
+                                string(name: 'REPO_NAME', value: repoName),
+                                booleanParam(name: 'FORCE_BUILD', value: params.FORCE_BUILD_ALL)
+                            ],
+                            wait: true,
+                            propagate: false
+
+                        def r = result.result ?: 'SUCCESS'
+
+                        echo "${repoName} result: ${r}"
+
+                        if (r == 'SUCCESS') {
+                            builtRepos.add(repoName)
+                        } else if (r == 'NOT_BUILT') {
+                            skippedRepos.add(repoName)
+                        } else if (r == 'FAILURE' || r == 'ABORTED' || r == 'UNSTABLE') {
+                            failedRepos.add("${repoName}: ${r}")
+                        } else {
+                            otherRepos.add("${repoName}: ${r}")
+                        }
+                    }
+
+                    if (failedRepos || otherRepos) {
+                        currentBuild.result = 'UNSTABLE'
+                    }
+
+                    currentBuild.description = """
+Built: ${builtRepos.size()}<br>
+Skipped no change: ${skippedRepos.size()}<br>
+Failed: ${failedRepos.size()}<br>
+Other: ${otherRepos.size()}<br>
+${builtRepos ? 'Built repos: ' + builtRepos.join(', ') + '<br>' : ''}
+${skippedRepos ? 'Skipped repos: ' + skippedRepos.join(', ') + '<br>' : ''}
+${failedRepos ? 'Failed repos:<br>' + failedRepos.join('<br>') + '<br>' : ''}
+${otherRepos ? 'Other repos:<br>' + otherRepos.join('<br>') : ''}
+"""
+                }
+            }
+        }
+    }
+
+    post {
+        always {
+            echo "Weekly build finished."
+        }
+    }
+}
