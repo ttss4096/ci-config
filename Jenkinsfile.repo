@@ -83,6 +83,11 @@ pipeline {
                     }
 
                     def repo = config.repos.find { it.name.toString().trim() == params.REPO_NAME.toString().trim() }
+                    //debug output
+                    echo "DEBUG: config.repos type is ${config.repos.getClass()}"
+                    echo "DEBUG: first repo name in yml is [${config.repos[0].name}]"
+                    echo "DEBUG: searched REPO_NAME is [${params.REPO_NAME}]"
+
 
                     if (repo == null) {
                         error "Repo config not found for REPO_NAME='${params.REPO_NAME}'. Please check repos.yml name field."
