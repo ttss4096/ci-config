@@ -20,23 +20,19 @@ pipeline {
     }
 
     environment {
-        FAILURE_TYPE = 'UNKNOWN'
-
-        SKIP_BUILD = 'false'
-
         STATE_DIR = '/var/lib/jenkins/ci-state'
-        STATE_FILE = ''
-        COMMIT_STATE_FILE = ''
-
-        REPO_URL = ''
-        REPO_BRANCH = ''
-        REPO_JDK = ''
-        BUILD_CMD = ''
-        PATCH_LIST = ''
-        ARTIFACT_PATTERNS = ''
-
-        REMOTE_COMMIT = ''
-        BUILD_KEY = ''
+        // FAILURE_TYPE = 'UNKNOWN'
+        // SKIP_BUILD = 'false'
+        // STATE_FILE = ''
+        // COMMIT_STATE_FILE = ''
+        // REPO_URL = ''
+        // REPO_BRANCH = ''
+        // REPO_JDK = ''
+        // BUILD_CMD = ''
+        // PATCH_LIST = ''
+        // ARTIFACT_PATTERNS = ''
+        // REMOTE_COMMIT = ''
+        // BUILD_KEY = ''
     }
 
     stages {
