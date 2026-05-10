@@ -48,37 +48,86 @@ pipeline {
                 script {
                     env.FAILURE_TYPE = 'LOAD_CONFIG_FAILED'
 
+                    echo "================ Load CI Config ================"
+                    echo "params.REPO_NAME='${params.REPO_NAME}'"
+                    echo "Workspace:"
+                    sh 'pwd && ls -la'
+                    echo "repos.yml content:"
+                    sh 'cat repos.yml'
+
                     if (!params.REPO_NAME?.trim()) {
-                        error "REPO_NAME is required"
+                        error "REPO_NAME is required. Current value is empty. Please set REPO_NAME=craft-engine"
                     }
 
                     if (!(params.REPO_NAME ==~ /^[A-Za-z0-9_.-]+$/)) {
                         error "Invalid REPO_NAME: ${params.REPO_NAME}"
                     }
 
-                    def config = readYaml file: 'repos.yml'
-                    def repo = config.repos.find { it.name == params.REPO_NAME }
-
-                    if (repo == null) {
-                        error "Repo config not found: ${params.REPO_NAME}"
+                    if (!fileExists('repos.yml')) {
+                        error "repos.yml not found in ci-config repository"
                     }
 
-                    env.REPO_URL = repo.url
-                    env.REPO_BRANCH = repo.branch
-                    env.REPO_JDK = repo.jdk ?: ''
-                    env.BUILD_CMD = repo.build_cmd
-                    env.PATCH_LIST = repo.patches ? repo.patches.join('\n') : ''
-                    env.ARTIFACT_PATTERNS = repo.artifact_patterns ? repo.artifact_patterns.join(',') : '**/build/libs/*.jar,**/target/*.jar'
+                    def config = readYaml file: 'repos.yml'
+
+                    if (!config) {
+                        error "repos.yml is empty or invalid"
+                    }
+
+                    if (!config.repos) {
+                        error "repos.yml must contain top-level key: repos"
+                    }
+
+                    echo "Repos found in repos.yml:"
+                    config.repos.each { r ->
+                        echo " - name='${r.name}', url='${r.url}', branch='${r.branch}', jdk='${r.jdk}', build_cmd='${r.build_cmd}'"
+                    }
+
+                    def repo = config.repos.find { it.name?.toString() == params.REPO_NAME.toString() }
+
+                    if (repo == null) {
+                        error "Repo config not found for REPO_NAME='${params.REPO_NAME}'. Please check repos.yml name field."
+                    }
+
+                    if (!repo.url?.toString()?.trim()) {
+                        error "repo.url is empty for '${params.REPO_NAME}'. Please set url in repos.yml"
+                    }
+
+                    if (!repo.branch?.toString()?.trim()) {
+                        error "repo.branch is empty for '${params.REPO_NAME}'. Please set branch in repos.yml"
+                    }
+
+                    if (!repo.build_cmd?.toString()?.trim()) {
+                        error "repo.build_cmd is empty for '${params.REPO_NAME}'. Please set build_cmd in repos.yml"
+                    }
+
+                    env.REPO_URL = repo.url.toString().trim()
+                    env.REPO_BRANCH = repo.branch.toString().trim()
+                    env.REPO_JDK = repo.jdk ? repo.jdk.toString().trim() : ''
+                    env.BUILD_CMD = repo.build_cmd.toString().trim()
+                    env.PATCH_LIST = repo.patches ? repo.patches.collect { it.toString().trim() }.findAll { it }.join('\n') : ''
+                    env.ARTIFACT_PATTERNS = repo.artifact_patterns ? repo.artifact_patterns.collect { it.toString().trim() }.findAll { it }.join(',') : '**/build/libs/*.jar,**/target/*.jar'
 
                     env.STATE_FILE = "${env.STATE_DIR}/${repo.name}.last_success_key"
                     env.COMMIT_STATE_FILE = "${env.STATE_DIR}/${repo.name}.last_success_commit"
 
+                    echo "Loaded repo config:"
+                    echo "REPO_NAME=${params.REPO_NAME}"
+                    echo "REPO_URL=${env.REPO_URL}"
+                    echo "REPO_BRANCH=${env.REPO_BRANCH}"
+                    echo "REPO_JDK=${env.REPO_JDK}"
+                    echo "BUILD_CMD=${env.BUILD_CMD}"
+                    echo "PATCH_LIST=${env.PATCH_LIST}"
+                    echo "ARTIFACT_PATTERNS=${env.ARTIFACT_PATTERNS}"
+                    echo "STATE_FILE=${env.STATE_FILE}"
+                    echo "COMMIT_STATE_FILE=${env.COMMIT_STATE_FILE}"
+                    echo "================================================"
+
                     currentBuild.displayName = "#${env.BUILD_NUMBER} ${repo.name}"
                     currentBuild.description = """
-Repo: ${repo.name}<br>
-Branch: ${repo.branch}<br>
-JDK: ${repo.jdk ?: 'default'}
-"""
+        Repo: ${repo.name}<br>
+        Branch: ${repo.branch}<br>
+        JDK: ${repo.jdk ?: 'default'}
+        """
                 }
             }
         }
