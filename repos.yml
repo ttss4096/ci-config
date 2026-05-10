@@ -10,3 +10,5 @@ repos:
       - patches/craft-engine/0001-legacy-custom-block-item-api.patch
       - patches/craft-engine/0002-legacy-craftengine-items-bytecode-bridge.patch
       - patches/craft-engine/0003-update-check-modrinth-link.patch
+      - patches/craft-engine/0004-fix-gradle-download-speed.patch
+      - patches/craft-engine/0005-add-aliyun-mirror.patch
