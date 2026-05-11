@@ -2,10 +2,11 @@ diff --git a/settings.gradle.kts b/settings.gradle.kts
 index e3de0edb9..c36aa9d6b 100644
 --- a/settings.gradle.kts
 +++ b/settings.gradle.kts
-@@ -14,8 +14,11 @@ pluginManagement {
+@@ -14,8 +14,12 @@ pluginManagement {
          kotlin("jvm") version "2.3.10"
      }
      repositories {
++        mavenLocal()
 +        maven("https://maven.aliyun.com/repository/public/")
 +        maven("https://maven.aliyun.com/repository/google/")
 +        maven("https://maven.aliyun.com/repository/gradle-plugin/")

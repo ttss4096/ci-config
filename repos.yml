@@ -3,7 +3,7 @@ repos:
     url: https://gh.ttss4096.com/Xiao-MoMi/craft-engine.git
     branch: dev
     jdk: jdk21
-    build_cmd: "./gradlew -I legacy-bridge.gradle :bukkit:paper-loader:shadowJar --build-cache --parallel"
+    build_cmd: "./gradlew -Dorg.gradle.internal.http.connectionTimeout=300000 -Dorg.gradle.internal.http.socketTimeout=300000 -I legacy-bridge.gradle :bukkit:paper-loader:shadowJar --build-cache --parallel"
     artifact_patterns:
       - "target/*.jar"
     patches:
